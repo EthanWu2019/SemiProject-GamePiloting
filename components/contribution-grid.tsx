@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { getAllRecords } from '@/lib/storage'
+import { getRecordsInRange } from '@/lib/storage'
 import { getBeijingDateString, formatDateString } from '@/lib/time'
-import { GAMES } from '@/lib/types'
+import { GAMES, type AllRecords } from '@/lib/types'
 import {
   Tooltip,
   TooltipContent,
@@ -18,7 +18,7 @@ interface ContributionGridProps {
   onDateChange: (date: string) => void
 }
 
-function getCompletionLevel(date: string, records: Record<string, Record<string, { status: string }>>): number {
+function getCompletionLevel(date: string, records: AllRecords): number {
   const dayRecord = records[date]
   if (!dayRecord) return 0
   
@@ -54,19 +54,21 @@ function getWeekdayLabel(dateStr: string): string {
   return weekdays[date.getDay()]
 }
 
-function getDayLabel(dateStr: string): string {
-  const day = dateStr.split('-')[2]
-  return String(parseInt(day))
-}
-
 export function ContributionGrid({ selectedDate, onDateChange }: ContributionGridProps) {
   const today = getBeijingDateString()
   const days = useMemo(() => getLast30Days(), [])
+  const [records, setRecords] = useState<AllRecords>({})
   
-  const records = useMemo(() => {
-    if (typeof window === 'undefined') return {}
-    return getAllRecords()
-  }, [selectedDate]) // Re-fetch when selected date changes (after status updates)
+  useEffect(() => {
+    const loadRecords = async () => {
+      if (days.length === 0) return
+      const startDate = days[0]
+      const endDate = days[days.length - 1]
+      const data = await getRecordsInRange(startDate, endDate)
+      setRecords(data)
+    }
+    loadRecords()
+  }, [days, selectedDate]) // Re-fetch when selected date changes
   
   const levelColors = [
     'bg-muted',                           // Level 0: 无数据

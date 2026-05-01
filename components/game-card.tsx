@@ -1,11 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { STATUS_CONFIG, type GameStatus } from '@/lib/types'
 import { formatUpdateTime } from '@/lib/time'
-import { Clock, Circle, CheckCircle2, PlayCircle } from 'lucide-react'
+import { Clock, Circle, CheckCircle2, PlayCircle, Loader2 } from 'lucide-react'
 
 interface GameCardProps {
   gameId: string
@@ -13,7 +14,7 @@ interface GameCardProps {
   status: GameStatus
   lastUpdate: string
   isAdmin: boolean
-  onStatusChange?: (gameId: string, status: GameStatus) => void
+  onStatusChange?: (gameId: string, status: GameStatus) => void | Promise<void>
 }
 
 const StatusIcon = ({ status }: { status: GameStatus }) => {
@@ -35,7 +36,18 @@ export function GameCard({
   isAdmin,
   onStatusChange,
 }: GameCardProps) {
+  const [isUpdating, setIsUpdating] = useState(false)
   const config = STATUS_CONFIG[status]
+
+  const handleStatusChange = async (newStatus: GameStatus) => {
+    if (!onStatusChange || isUpdating) return
+    setIsUpdating(true)
+    try {
+      await onStatusChange(gameId, newStatus)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   return (
     <Card className="bg-card border-border hover:border-primary/30 transition-colors">
@@ -63,7 +75,12 @@ export function GameCard({
         </div>
 
         {isAdmin && onStatusChange && (
-          <div className="flex gap-1.5 sm:gap-2 mt-3 pt-3 border-t border-border">
+          <div className="flex gap-1.5 sm:gap-2 mt-3 pt-3 border-t border-border relative">
+            {isUpdating && (
+              <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              </div>
+            )}
             <Button
               size="sm"
               variant={status === 'pending' ? 'default' : 'outline'}
@@ -71,7 +88,8 @@ export function GameCard({
                 'flex-1 h-7 sm:h-8 text-xs sm:text-sm px-2',
                 status === 'pending' && 'bg-red-600 hover:bg-red-700 text-white'
               )}
-              onClick={() => onStatusChange(gameId, 'pending')}
+              onClick={() => handleStatusChange('pending')}
+              disabled={isUpdating}
             >
               未开始
             </Button>
@@ -82,7 +100,8 @@ export function GameCard({
                 'flex-1 h-7 sm:h-8 text-xs sm:text-sm px-2',
                 status === 'in_progress' && 'bg-yellow-600 hover:bg-yellow-700 text-white'
               )}
-              onClick={() => onStatusChange(gameId, 'in_progress')}
+              onClick={() => handleStatusChange('in_progress')}
+              disabled={isUpdating}
             >
               进行中
             </Button>
@@ -93,7 +112,8 @@ export function GameCard({
                 'flex-1 h-7 sm:h-8 text-xs sm:text-sm px-2',
                 status === 'completed' && 'bg-green-600 hover:bg-green-700 text-white'
               )}
-              onClick={() => onStatusChange(gameId, 'completed')}
+              onClick={() => handleStatusChange('completed')}
+              disabled={isUpdating}
             >
               已完成
             </Button>

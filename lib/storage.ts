@@ -1,46 +1,110 @@
-import type { AllRecords, DailyRecord, GameStatus, GameRecord } from './types'
+import { createClient } from '@/lib/supabase/client'
+import type { GameStatus, GameRecord, DailyRecord, AllRecords } from './types'
 
-const STORAGE_KEY = 'gamepiloting_records'
-
-export function getAllRecords(): AllRecords {
-  if (typeof window === 'undefined') return {}
-  try {
-    const data = localStorage.getItem(STORAGE_KEY)
-    return data ? JSON.parse(data) : {}
-  } catch {
+// 获取指定日期的所有游戏记录
+export async function getDailyRecord(date: string): Promise<DailyRecord> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('game_progress')
+    .select('game_id, status, updated_at')
+    .eq('date', date)
+  
+  if (error) {
+    console.error('Error fetching daily record:', error)
     return {}
+  }
+  
+  const records: DailyRecord = {}
+  data?.forEach((row) => {
+    records[row.game_id] = {
+      status: row.status as GameStatus,
+      lastUpdate: row.updated_at,
+    }
+  })
+  
+  return records
+}
+
+// 获取单个游戏记录
+export async function getGameRecord(date: string, gameId: string): Promise<GameRecord> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('game_progress')
+    .select('status, updated_at')
+    .eq('date', date)
+    .eq('game_id', gameId)
+    .single()
+  
+  if (error || !data) {
+    return { status: 'pending', lastUpdate: '' }
+  }
+  
+  return {
+    status: data.status as GameStatus,
+    lastUpdate: data.updated_at,
   }
 }
 
-export function getDailyRecord(date: string): DailyRecord {
-  const allRecords = getAllRecords()
-  return allRecords[date] || {}
-}
-
-export function updateGameStatus(
+// 更新游戏状态
+export async function updateGameStatus(
   date: string,
   gameId: string,
   status: GameStatus
-): void {
-  const allRecords = getAllRecords()
+): Promise<boolean> {
+  const supabase = createClient()
   
-  if (!allRecords[date]) {
-    allRecords[date] = {}
+  const { error } = await supabase
+    .from('game_progress')
+    .upsert(
+      {
+        date,
+        game_id: gameId,
+        status,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'date,game_id',
+      }
+    )
+  
+  if (error) {
+    console.error('Error updating game status:', error)
+    return false
   }
   
-  const now = new Date()
-  // 转换为北京时间
-  const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000) - (now.getTimezoneOffset() * 60 * 1000))
-  
-  allRecords[date][gameId] = {
-    status,
-    lastUpdate: beijingTime.toISOString(),
-  }
-  
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(allRecords))
+  return true
 }
 
-export function getGameRecord(date: string, gameId: string): GameRecord {
-  const dailyRecord = getDailyRecord(date)
-  return dailyRecord[gameId] || { status: 'pending', lastUpdate: '' }
+// 获取一段时间内的所有记录（用于贡献图）
+export async function getRecordsInRange(
+  startDate: string,
+  endDate: string
+): Promise<AllRecords> {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('game_progress')
+    .select('date, game_id, status, updated_at')
+    .gte('date', startDate)
+    .lte('date', endDate)
+  
+  if (error) {
+    console.error('Error fetching records:', error)
+    return {}
+  }
+  
+  const records: AllRecords = {}
+  data?.forEach((row) => {
+    if (!records[row.date]) {
+      records[row.date] = {}
+    }
+    records[row.date][row.game_id] = {
+      status: row.status as GameStatus,
+      lastUpdate: row.updated_at,
+    }
+  })
+  
+  return records
 }
