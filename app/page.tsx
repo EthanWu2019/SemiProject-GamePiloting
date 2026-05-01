@@ -9,10 +9,11 @@ import { ThemeToggle } from '@/components/theme-toggle'
 import { ThemeInit } from '@/components/theme-init'
 import { Confetti } from '@/components/confetti'
 import { GAMES, type GameStatus } from '@/lib/types'
-import { getGameRecord, updateGameStatus } from '@/lib/storage'
+import { getDailyRecord, updateGameStatus } from '@/lib/storage'
 import { getBeijingDateString, isFutureDate } from '@/lib/time'
 import { Badge } from '@/components/ui/badge'
-import { Gamepad2, AlertCircle, Circle, PlayCircle, CheckCircle2 } from 'lucide-react'
+import { Gamepad2, AlertCircle, Circle, PlayCircle, CheckCircle2, RefreshCw } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 export default function HomePage() {
   const [selectedDate, setSelectedDate] = useState('')
@@ -22,6 +23,7 @@ export default function HomePage() {
   >({})
   const [showConfetti, setShowConfetti] = useState(false)
   const [hasShownConfetti, setHasShownConfetti] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
 
   // 初始化选中日期
   useEffect(() => {
@@ -29,13 +31,24 @@ export default function HomePage() {
   }, [])
 
   // 加载选中日期的游戏记录
-  const loadRecords = useCallback(() => {
+  const loadRecords = useCallback(async () => {
     if (!selectedDate) return
-    const records: Record<string, { status: GameStatus; lastUpdate: string }> = {}
-    GAMES.forEach((game) => {
-      records[game.id] = getGameRecord(selectedDate, game.id)
-    })
-    setGameRecords(records)
+    setIsLoading(true)
+    
+    try {
+      const dailyRecord = await getDailyRecord(selectedDate)
+      const records: Record<string, { status: GameStatus; lastUpdate: string }> = {}
+      
+      GAMES.forEach((game) => {
+        records[game.id] = dailyRecord[game.id] || { status: 'pending', lastUpdate: '' }
+      })
+      
+      setGameRecords(records)
+    } catch (error) {
+      console.error('Error loading records:', error)
+    } finally {
+      setIsLoading(false)
+    }
   }, [selectedDate])
 
   useEffect(() => {
@@ -62,9 +75,11 @@ export default function HomePage() {
     }
   }, [gameRecords, selectedDate, hasShownConfetti])
 
-  const handleStatusChange = (gameId: string, status: GameStatus) => {
-    updateGameStatus(selectedDate, gameId, status)
-    loadRecords()
+  const handleStatusChange = async (gameId: string, status: GameStatus) => {
+    const success = await updateGameStatus(selectedDate, gameId, status)
+    if (success) {
+      loadRecords()
+    }
   }
 
   const handleLogin = () => {
@@ -77,6 +92,10 @@ export default function HomePage() {
 
   const handleConfettiComplete = () => {
     setShowConfetti(false)
+  }
+
+  const handleRefresh = () => {
+    loadRecords()
   }
 
   const isFuture = selectedDate ? isFutureDate(selectedDate) : false
@@ -115,6 +134,15 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleRefresh}
+                disabled={isLoading}
+                className="h-8 w-8"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
               <ThemeToggle />
               {isAdmin && (
                 <Badge variant="secondary" className="bg-primary/20 text-primary text-[10px] sm:text-xs px-1.5 sm:px-2">
