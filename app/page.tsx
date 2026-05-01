@@ -3,8 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { GameCard } from '@/components/game-card'
 import { AdminDialog } from '@/components/admin-dialog'
-import { DateSelector } from '@/components/date-selector'
+import { ContributionGrid } from '@/components/contribution-grid'
 import { StatusLegend } from '@/components/status-legend'
+import { TimeDisplay } from '@/components/time-display'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { Confetti } from '@/components/confetti'
 import { GAMES, type GameStatus } from '@/lib/types'
 import { getGameRecord, updateGameStatus } from '@/lib/storage'
 import { getBeijingDateString, isFutureDate } from '@/lib/time'
@@ -17,6 +20,8 @@ export default function HomePage() {
   const [gameRecords, setGameRecords] = useState<
     Record<string, { status: GameStatus; lastUpdate: string }>
   >({})
+  const [showConfetti, setShowConfetti] = useState(false)
+  const [hasShownConfetti, setHasShownConfetti] = useState(false)
 
   // 初始化选中日期
   useEffect(() => {
@@ -35,7 +40,28 @@ export default function HomePage() {
 
   useEffect(() => {
     loadRecords()
-  }, [loadRecords])
+    // 重置礼花状态当日期变化
+    setHasShownConfetti(false)
+  }, [loadRecords, selectedDate])
+
+  // 检查是否全部完成并显示礼花
+  useEffect(() => {
+    const completedCount = Object.values(gameRecords).filter(
+      (r) => r.status === 'completed'
+    ).length
+    const totalCount = GAMES.length
+    const today = getBeijingDateString()
+    
+    if (
+      completedCount === totalCount && 
+      totalCount > 0 && 
+      selectedDate === today &&
+      !hasShownConfetti
+    ) {
+      setShowConfetti(true)
+      setHasShownConfetti(true)
+    }
+  }, [gameRecords, selectedDate, hasShownConfetti])
 
   const handleStatusChange = (gameId: string, status: GameStatus) => {
     updateGameStatus(selectedDate, gameId, status)
@@ -48,6 +74,10 @@ export default function HomePage() {
 
   const handleLogout = () => {
     setIsAdmin(false)
+  }
+
+  const handleConfettiComplete = () => {
+    setShowConfetti(false)
   }
 
   const isFuture = selectedDate ? isFutureDate(selectedDate) : false
@@ -68,6 +98,8 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-background">
+      <Confetti show={showConfetti} onComplete={handleConfettiComplete} />
+      
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -78,7 +110,8 @@ export default function HomePage() {
               <p className="text-sm text-muted-foreground">代肝进度追踪</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
             {isAdmin && (
               <Badge variant="secondary" className="bg-primary/20 text-primary">
                 管理模式
@@ -92,13 +125,21 @@ export default function HomePage() {
           </div>
         </header>
 
-        {/* Date Selector */}
-        <section className="mb-6">
-          <DateSelector
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-          />
-        </section>
+        {/* Time Display - C位展示 */}
+        <TimeDisplay />
+
+        {/* Contribution Grid */}
+        <ContributionGrid
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+        />
+
+        {/* Current Date Display */}
+        <div className="flex items-center justify-center mb-6">
+          <div className="bg-secondary/50 rounded-lg px-4 py-2 text-sm">
+            当前查看: <span className="font-medium text-foreground">{selectedDate}</span>
+          </div>
+        </div>
 
         {/* Status Legend */}
         <section className="mb-6">
@@ -109,14 +150,14 @@ export default function HomePage() {
         {!isFuture && (
           <section className="mb-6">
             <div className="flex items-center gap-4 text-sm">
-              <span className="text-muted-foreground">今日进度:</span>
-              <div className="flex-1 bg-secondary rounded-full h-2 overflow-hidden">
+              <span className="text-muted-foreground">当日进度:</span>
+              <div className="flex-1 bg-secondary rounded-full h-3 overflow-hidden">
                 <div
-                  className="h-full bg-green-500 transition-all duration-300"
+                  className="h-full bg-green-500 transition-all duration-500 ease-out"
                   style={{ width: `${(completedCount / totalCount) * 100}%` }}
                 />
               </div>
-              <span className="text-foreground font-medium">
+              <span className="text-foreground font-bold text-lg">
                 {completedCount}/{totalCount}
               </span>
             </div>
@@ -126,7 +167,7 @@ export default function HomePage() {
         {/* Future Date Warning */}
         {isFuture && (
           <section className="mb-6">
-            <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 text-yellow-400">
+            <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 text-yellow-600 dark:text-yellow-400">
               <AlertCircle className="h-5 w-5 shrink-0" />
               <p className="text-sm">这是未来的日期，暂无记录数据</p>
             </div>
