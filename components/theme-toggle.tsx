@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Sun, Moon } from 'lucide-react'
 
-interface Document {
-  startViewTransition?: (callback: () => void) => ViewTransition
-}
-
-interface ViewTransition {
-  ready: Promise<void>
-  finished: Promise<void>
+declare global {
+  interface Document {
+    startViewTransition?: (callback: () => void) => {
+      ready: Promise<void>
+      finished: Promise<void>
+    }
+  }
 }
 
 export function ThemeToggle() {
@@ -30,7 +30,7 @@ export function ThemeToggle() {
   }, [])
 
   const toggleTheme = useCallback(
-    (e: React.MouseEvent) => {
+    async (e: React.MouseEvent) => {
       if (isAnimatingRef.current) return
 
       const x = e.clientX
@@ -44,17 +44,19 @@ export function ThemeToggle() {
 
       const newTheme = theme === 'dark' ? 'light' : 'dark'
 
-      if ((document as unknown as Document).startViewTransition) {
+      if (document.startViewTransition) {
         isAnimatingRef.current = true
 
-        const transition = (document as unknown as Document).startViewTransition!(() => {
+        const transition = document.startViewTransition(() => {
           document.documentElement.classList.remove('dark', 'light')
           document.documentElement.classList.add(newTheme)
           setTheme(newTheme)
           localStorage.setItem('theme', newTheme)
         })
 
-        transition.ready.then(() => {
+        try {
+          await transition.ready
+          
           document.documentElement.animate(
             {
               clipPath: [
@@ -68,12 +70,15 @@ export function ThemeToggle() {
               pseudoElement: '::view-transition-new(root)',
             }
           )
-        })
-
-        transition.finished.then(() => {
+          
+          await transition.finished
+        } catch {
+          // Fallback if animation fails
+        } finally {
           isAnimatingRef.current = false
-        })
+        }
       } else {
+        // Fallback for browsers without View Transitions
         document.documentElement.classList.remove('dark', 'light')
         document.documentElement.classList.add(newTheme)
         setTheme(newTheme)
@@ -85,7 +90,7 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <Button variant="ghost" size="icon" disabled>
+      <Button variant="ghost" size="icon" disabled className="h-9 w-9">
         <Sun className="h-5 w-5" />
       </Button>
     )
@@ -96,6 +101,7 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={toggleTheme}
+      className="h-9 w-9"
       aria-label={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
     >
       {theme === 'dark' ? (

@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react'
 import { GameCard } from '@/components/game-card'
 import { AdminDialog } from '@/components/admin-dialog'
 import { ContributionGrid } from '@/components/contribution-grid'
-import { StatusLegend } from '@/components/status-legend'
 import { TimeDisplay } from '@/components/time-display'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Confetti } from '@/components/confetti'
@@ -12,7 +11,7 @@ import { GAMES, type GameStatus } from '@/lib/types'
 import { getGameRecord, updateGameStatus } from '@/lib/storage'
 import { getBeijingDateString, isFutureDate } from '@/lib/time'
 import { Badge } from '@/components/ui/badge'
-import { Gamepad2, AlertCircle } from 'lucide-react'
+import { Gamepad2, AlertCircle, Circle, PlayCircle, CheckCircle2 } from 'lucide-react'
 
 export default function HomePage() {
   const [selectedDate, setSelectedDate] = useState('')
@@ -40,7 +39,6 @@ export default function HomePage() {
 
   useEffect(() => {
     loadRecords()
-    // 重置礼花状态当日期变化
     setHasShownConfetti(false)
   }, [loadRecords, selectedDate])
 
@@ -86,6 +84,9 @@ export default function HomePage() {
   const completedCount = Object.values(gameRecords).filter(
     (r) => r.status === 'completed'
   ).length
+  const inProgressCount = Object.values(gameRecords).filter(
+    (r) => r.status === 'in_progress'
+  ).length
   const totalCount = GAMES.length
 
   if (!selectedDate) {
@@ -100,105 +101,116 @@ export default function HomePage() {
     <main className="min-h-screen bg-background">
       <Confetti show={showConfetti} onComplete={handleConfettiComplete} />
       
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Header */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div className="flex items-center gap-3">
-            <Gamepad2 className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">GamePiloting</h1>
-              <p className="text-sm text-muted-foreground">代肝进度追踪</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            {isAdmin && (
-              <Badge variant="secondary" className="bg-primary/20 text-primary">
-                管理模式
-              </Badge>
-            )}
-            <AdminDialog
-              isAdmin={isAdmin}
-              onLogin={handleLogin}
-              onLogout={handleLogout}
-            />
-          </div>
-        </header>
-
-        {/* Time Display - C位展示 */}
-        <TimeDisplay />
-
-        {/* Contribution Grid */}
-        <ContributionGrid
-          selectedDate={selectedDate}
-          onDateChange={setSelectedDate}
-        />
-
-        {/* Current Date Display */}
-        <div className="flex items-center justify-center mb-6">
-          <div className="bg-secondary/50 rounded-lg px-4 py-2 text-sm">
-            当前查看: <span className="font-medium text-foreground">{selectedDate}</span>
-          </div>
-        </div>
-
-        {/* Status Legend */}
-        <section className="mb-6">
-          <StatusLegend />
-        </section>
-
-        {/* Progress Summary */}
-        {!isFuture && (
-          <section className="mb-6">
-            <div className="flex items-center gap-4 text-sm">
-              <span className="text-muted-foreground">当日进度:</span>
-              <div className="flex-1 bg-secondary rounded-full h-3 overflow-hidden">
-                <div
-                  className="h-full bg-green-500 transition-all duration-500 ease-out"
-                  style={{ width: `${(completedCount / totalCount) * 100}%` }}
-                />
+      {/* 手机端第一屏：100vh 包含所有关键信息 */}
+      <div className="min-h-screen sm:min-h-0 flex flex-col">
+        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-6 max-w-4xl flex-1 flex flex-col">
+          {/* Header - 紧凑版 */}
+          <header className="flex items-center justify-between gap-2 mb-3 sm:mb-6">
+            <div className="flex items-center gap-2">
+              <Gamepad2 className="h-5 w-5 sm:h-7 sm:w-7 text-primary" />
+              <div>
+                <h1 className="text-base sm:text-xl font-bold text-foreground">GamePiloting</h1>
               </div>
-              <span className="text-foreground font-bold text-lg">
-                {completedCount}/{totalCount}
-              </span>
             </div>
-          </section>
-        )}
-
-        {/* Future Date Warning */}
-        {isFuture && (
-          <section className="mb-6">
-            <div className="flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-4 py-3 text-yellow-600 dark:text-yellow-400">
-              <AlertCircle className="h-5 w-5 shrink-0" />
-              <p className="text-sm">这是未来的日期，暂无记录数据</p>
-            </div>
-          </section>
-        )}
-
-        {/* Game Cards Grid */}
-        <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {GAMES.map((game) => {
-            const record = gameRecords[game.id] || {
-              status: 'pending' as GameStatus,
-              lastUpdate: '',
-            }
-            return (
-              <GameCard
-                key={game.id}
-                gameId={game.id}
-                gameName={game.name}
-                status={record.status}
-                lastUpdate={record.lastUpdate}
-                isAdmin={isAdmin && !isFuture}
-                onStatusChange={handleStatusChange}
+            <div className="flex items-center gap-1 sm:gap-2">
+              <ThemeToggle />
+              {isAdmin && (
+                <Badge variant="secondary" className="bg-primary/20 text-primary text-[10px] sm:text-xs px-1.5 sm:px-2">
+                  管理中
+                </Badge>
+              )}
+              <AdminDialog
+                isAdmin={isAdmin}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
               />
-            )
-          })}
-        </section>
+            </div>
+          </header>
 
-        {/* Footer */}
-        <footer className="mt-12 pt-6 border-t border-border text-center text-sm text-muted-foreground">
-          <p>GamePiloting - 让代肝更透明</p>
-        </footer>
+          {/* Time Display - C位 */}
+          <TimeDisplay />
+
+          {/* 移动端：进度摘要 */}
+          {!isFuture && (
+            <div className="flex items-center justify-center gap-4 mb-3 sm:mb-4 py-2 bg-secondary/30 rounded-lg sm:hidden">
+              <div className="flex items-center gap-1.5 text-xs">
+                <Circle className="h-3 w-3 text-red-400 fill-red-400" />
+                <span>{totalCount - completedCount - inProgressCount}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs">
+                <PlayCircle className="h-3 w-3 text-yellow-400" />
+                <span>{inProgressCount}</span>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs">
+                <CheckCircle2 className="h-3 w-3 text-green-400" />
+                <span>{completedCount}/{totalCount}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Future Date Warning */}
+          {isFuture && (
+            <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2 text-yellow-600 dark:text-yellow-400 mb-3 sm:mb-4">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <p className="text-xs sm:text-sm">这是未来的日期</p>
+            </div>
+          )}
+
+          {/* Game Cards Grid - 紧凑 */}
+          <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 flex-1 content-start">
+            {GAMES.map((game) => {
+              const record = gameRecords[game.id] || {
+                status: 'pending' as GameStatus,
+                lastUpdate: '',
+              }
+              return (
+                <GameCard
+                  key={game.id}
+                  gameId={game.id}
+                  gameName={game.name}
+                  status={record.status}
+                  lastUpdate={record.lastUpdate}
+                  isAdmin={isAdmin && !isFuture}
+                  onStatusChange={handleStatusChange}
+                />
+              )
+            })}
+          </section>
+        </div>
+      </div>
+
+      {/* 桌面端额外内容 */}
+      <div className="hidden sm:block">
+        <div className="container mx-auto px-4 pb-8 max-w-4xl">
+          {/* Contribution Grid - 只在桌面端显示 */}
+          <ContributionGrid
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+          />
+
+          {/* Desktop Progress Bar */}
+          {!isFuture && (
+            <section className="mb-6">
+              <div className="flex items-center gap-4 text-sm bg-card border border-border rounded-lg p-4">
+                <span className="text-muted-foreground">当日进度:</span>
+                <div className="flex-1 bg-secondary rounded-full h-3 overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 transition-all duration-500 ease-out"
+                    style={{ width: `${(completedCount / totalCount) * 100}%` }}
+                  />
+                </div>
+                <span className="text-foreground font-bold text-lg">
+                  {completedCount}/{totalCount}
+                </span>
+              </div>
+            </section>
+          )}
+
+          {/* Footer */}
+          <footer className="pt-4 border-t border-border text-center text-sm text-muted-foreground">
+            <p>GamePiloting - 让代肝更透明</p>
+          </footer>
+        </div>
       </div>
     </main>
   )

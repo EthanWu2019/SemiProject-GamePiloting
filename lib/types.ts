@@ -42,4 +42,4 @@ export const STATUS_CONFIG = {
   },
 } as const
 
-export const ADMIN_PASSWORD = 'daily123'
+export const ADMIN_PASSWORD = 'wuyuzhe'
