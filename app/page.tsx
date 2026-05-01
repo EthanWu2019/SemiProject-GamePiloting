@@ -8,16 +8,28 @@ import { TimeDisplay } from '@/components/time-display'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { ThemeInit } from '@/components/theme-init'
 import { Confetti } from '@/components/confetti'
-import { GAMES, type GameStatus } from '@/lib/types'
-import { getDailyRecord, updateGameStatus } from '@/lib/storage'
+import { GameManager } from '@/components/game-manager'
+import { TaskManager } from '@/components/task-manager'
+import type { GameStatus, Game, OneTimeTask } from '@/lib/types'
+import { getDailyRecord, updateGameStatus, getActiveGames, getAllGames, getOneTimeTasks, getPendingTasks } from '@/lib/storage'
 import { getBeijingDateString, isFutureDate } from '@/lib/time'
-import { Badge } from '@/components/ui/badge'
-import { Gamepad2, AlertCircle, Circle, PlayCircle, CheckCircle2, RefreshCw } from 'lucide-react'
+import { RefreshCw, Settings, ListTodo } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export default function HomePage() {
   const [selectedDate, setSelectedDate] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [games, setGames] = useState<Game[]>([])
+  const [allGames, setAllGames] = useState<Game[]>([])
+  const [tasks, setTasks] = useState<OneTimeTask[]>([])
   const [gameRecords, setGameRecords] = useState<
     Record<string, { status: GameStatus; lastUpdate: string }>
   >({})
@@ -25,22 +37,35 @@ export default function HomePage() {
   const [hasShownConfetti, setHasShownConfetti] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // 初始化选中日期
   useEffect(() => {
     setSelectedDate(getBeijingDateString())
   }, [])
 
+  // 加载游戏列表
+  const loadGames = useCallback(async () => {
+    const activeGames = await getActiveGames()
+    const allGamesList = await getAllGames()
+    setGames(activeGames)
+    setAllGames(allGamesList)
+  }, [])
+
+  // 加载任务
+  const loadTasks = useCallback(async () => {
+    const taskList = isAdmin ? await getOneTimeTasks() : await getPendingTasks()
+    setTasks(taskList)
+  }, [isAdmin])
+
   // 加载选中日期的游戏记录
   const loadRecords = useCallback(async () => {
-    if (!selectedDate) return
+    if (!selectedDate || games.length === 0) return
     setIsLoading(true)
     
     try {
       const dailyRecord = await getDailyRecord(selectedDate)
       const records: Record<string, { status: GameStatus; lastUpdate: string }> = {}
       
-      GAMES.forEach((game) => {
-        records[game.id] = dailyRecord[game.id] || { status: 'pending', lastUpdate: '' }
+      games.forEach((game) => {
+        records[game.game_id] = dailyRecord[game.game_id] || { status: 'pending', lastUpdate: '' }
       })
       
       setGameRecords(records)
@@ -49,7 +74,15 @@ export default function HomePage() {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedDate])
+  }, [selectedDate, games])
+
+  useEffect(() => {
+    loadGames()
+  }, [loadGames])
+
+  useEffect(() => {
+    loadTasks()
+  }, [loadTasks])
 
   useEffect(() => {
     loadRecords()
@@ -61,7 +94,7 @@ export default function HomePage() {
     const completedCount = Object.values(gameRecords).filter(
       (r) => r.status === 'completed'
     ).length
-    const totalCount = GAMES.length
+    const totalCount = games.length
     const today = getBeijingDateString()
     
     if (
@@ -73,7 +106,7 @@ export default function HomePage() {
       setShowConfetti(true)
       setHasShownConfetti(true)
     }
-  }, [gameRecords, selectedDate, hasShownConfetti])
+  }, [gameRecords, selectedDate, hasShownConfetti, games.length])
 
   const handleStatusChange = async (gameId: string, status: GameStatus) => {
     const success = await updateGameStatus(selectedDate, gameId, status)
@@ -82,37 +115,24 @@ export default function HomePage() {
     }
   }
 
-  const handleLogin = () => {
-    setIsAdmin(true)
-  }
-
-  const handleLogout = () => {
-    setIsAdmin(false)
-  }
-
-  const handleConfettiComplete = () => {
-    setShowConfetti(false)
-  }
-
+  const handleLogin = () => setIsAdmin(true)
+  const handleLogout = () => setIsAdmin(false)
+  const handleConfettiComplete = () => setShowConfetti(false)
   const handleRefresh = () => {
+    loadGames()
     loadRecords()
+    loadTasks()
   }
 
   const isFuture = selectedDate ? isFutureDate(selectedDate) : false
-
-  // 计算完成进度
-  const completedCount = Object.values(gameRecords).filter(
-    (r) => r.status === 'completed'
-  ).length
-  const inProgressCount = Object.values(gameRecords).filter(
-    (r) => r.status === 'in_progress'
-  ).length
-  const totalCount = GAMES.length
+  const completedCount = Object.values(gameRecords).filter((r) => r.status === 'completed').length
+  const totalCount = games.length
+  const pendingTasks = tasks.filter(t => t.status !== 'completed')
 
   if (!selectedDate) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">加载中...</p>
+        <div className="w-4 h-4 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin" />
       </div>
     )
   }
@@ -122,18 +142,13 @@ export default function HomePage() {
       <ThemeInit />
       <Confetti show={showConfetti} onComplete={handleConfettiComplete} />
       
-      {/* 手机端第一屏：100vh 包含所有关键信息 */}
-      <div className="min-h-screen sm:min-h-0 flex flex-col">
-        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-6 max-w-4xl flex-1 flex flex-col">
-          {/* Header - 紧凑版 */}
-          <header className="flex items-center justify-between gap-2 mb-3 sm:mb-6">
-            <div className="flex items-center gap-2">
-              <Gamepad2 className="h-5 w-5 sm:h-7 sm:w-7 text-primary" />
-              <div>
-                <h1 className="text-base sm:text-xl font-bold text-foreground">GamePiloting</h1>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 sm:gap-2">
+      <div className="min-h-screen flex flex-col">
+        <div className="container mx-auto px-4 py-4 sm:py-8 max-w-2xl flex-1 flex flex-col">
+          
+          {/* Header */}
+          <header className="flex items-center justify-between mb-6">
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight">GamePiloting</h1>
+            <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="icon"
@@ -145,9 +160,30 @@ export default function HomePage() {
               </Button>
               <ThemeToggle />
               {isAdmin && (
-                <Badge variant="secondary" className="bg-primary/20 text-primary text-[10px] sm:text-xs px-1.5 sm:px-2">
-                  管理中
-                </Badge>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>管理设置</DialogTitle>
+                    </DialogHeader>
+                    <Tabs defaultValue="games" className="mt-4">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="games">常驻游戏</TabsTrigger>
+                        <TabsTrigger value="tasks">单次任务</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="games" className="mt-4">
+                        <GameManager games={allGames} onUpdate={handleRefresh} />
+                      </TabsContent>
+                      <TabsContent value="tasks" className="mt-4">
+                        <TaskManager tasks={tasks} isAdmin={true} onUpdate={loadTasks} />
+                      </TabsContent>
+                    </Tabs>
+                  </DialogContent>
+                </Dialog>
               )}
               <AdminDialog
                 isAdmin={isAdmin}
@@ -157,89 +193,60 @@ export default function HomePage() {
             </div>
           </header>
 
-          {/* Time Display - C位 */}
+          {/* Time Display */}
           <TimeDisplay />
 
-          {/* 移动端：进度摘要 */}
-          {!isFuture && (
-            <div className="flex items-center justify-center gap-4 mb-3 sm:mb-4 py-2 bg-secondary/30 rounded-lg sm:hidden">
-              <div className="flex items-center gap-1.5 text-xs">
-                <Circle className="h-3 w-3 text-red-400 fill-red-400" />
-                <span>{totalCount - completedCount - inProgressCount}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <PlayCircle className="h-3 w-3 text-yellow-400" />
-                <span>{inProgressCount}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-xs">
-                <CheckCircle2 className="h-3 w-3 text-green-400" />
-                <span>{completedCount}/{totalCount}</span>
+          {/* Progress Summary */}
+          {!isFuture && totalCount > 0 && (
+            <div className="flex items-center justify-between py-3 px-4 mb-4 bg-secondary/50 rounded-lg">
+              <span className="text-sm text-muted-foreground">今日进度</span>
+              <div className="flex items-center gap-3">
+                <div className="w-32 h-1.5 bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-300"
+                    style={{ width: `${totalCount > 0 ? (completedCount / totalCount) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="text-sm font-medium tabular-nums">{completedCount}/{totalCount}</span>
               </div>
             </div>
           )}
 
-          {/* Future Date Warning */}
-          {isFuture && (
-            <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2 text-yellow-600 dark:text-yellow-400 mb-3 sm:mb-4">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <p className="text-xs sm:text-sm">这是未来的日期</p>
+          {/* One-time Tasks (for client view) */}
+          {!isAdmin && pendingTasks.length > 0 && (
+            <div className="mb-4 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <ListTodo className="h-4 w-4" />
+                <span>临时任务</span>
+              </div>
+              <TaskManager tasks={pendingTasks} isAdmin={false} onUpdate={loadTasks} />
             </div>
           )}
 
-          {/* Game Cards Grid - 紧凑 */}
-          <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 flex-1 content-start">
-            {GAMES.map((game) => {
-              const record = gameRecords[game.id] || {
-                status: 'pending' as GameStatus,
-                lastUpdate: '',
-              }
+          {/* Game Cards */}
+          <section className="space-y-2 flex-1">
+            {games.map((game) => {
+              const record = gameRecords[game.game_id] || { status: 'pending' as GameStatus, lastUpdate: '' }
               return (
                 <GameCard
-                  key={game.id}
-                  gameId={game.id}
+                  key={game.game_id}
+                  gameId={game.game_id}
                   gameName={game.name}
                   status={record.status}
-                  lastUpdate={record.lastUpdate}
                   isAdmin={isAdmin && !isFuture}
                   onStatusChange={handleStatusChange}
                 />
               )
             })}
           </section>
-        </div>
-      </div>
 
-      {/* 桌面端额外内容 */}
-      <div className="hidden sm:block">
-        <div className="container mx-auto px-4 pb-8 max-w-4xl">
-          {/* Contribution Grid - 只在桌面端显示 */}
-          <ContributionGrid
-            selectedDate={selectedDate}
-            onDateChange={setSelectedDate}
-          />
-
-          {/* Desktop Progress Bar */}
-          {!isFuture && (
-            <section className="mb-6">
-              <div className="flex items-center gap-4 text-sm bg-card border border-border rounded-lg p-4">
-                <span className="text-muted-foreground">当日进度:</span>
-                <div className="flex-1 bg-secondary rounded-full h-3 overflow-hidden">
-                  <div
-                    className="h-full bg-green-500 transition-all duration-500 ease-out"
-                    style={{ width: `${(completedCount / totalCount) * 100}%` }}
-                  />
-                </div>
-                <span className="text-foreground font-bold text-lg">
-                  {completedCount}/{totalCount}
-                </span>
-              </div>
-            </section>
-          )}
-
-          {/* Footer */}
-          <footer className="pt-4 border-t border-border text-center text-sm text-muted-foreground">
-            <p>GamePiloting - 让代肝更透明</p>
-          </footer>
+          {/* Contribution Grid - Desktop only */}
+          <div className="hidden sm:block mt-8">
+            <ContributionGrid
+              selectedDate={selectedDate}
+              onDateChange={setSelectedDate}
+            />
+          </div>
         </div>
       </div>
     </main>

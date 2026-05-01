@@ -33,19 +33,20 @@ export function AdminDialog({ isAdmin, onLogin, onLogout }: AdminDialogProps) {
       setPassword('')
       setError('')
     } else {
-      setError('密码错误，请重试')
+      setError('密码错误')
     }
   }
 
   if (isAdmin) {
     return (
       <Button
-        variant="outline"
+        variant="ghost"
+        size="sm"
         onClick={onLogout}
-        className="gap-2"
+        className="h-8 gap-1.5 text-xs"
       >
-        <LogOut className="h-4 w-4" />
-        退出代肝模式
+        <LogOut className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">退出</span>
       </Button>
     )
   }
@@ -53,31 +54,32 @@ export function AdminDialog({ isAdmin, onLogin, onLogout }: AdminDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Lock className="h-4 w-4" />
-          代肝模式
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs">
+          <Lock className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">管理</span>
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>进入代肝模式</DialogTitle>
-          <DialogDescription>
-            输入密码以进入管理模式，可以更新游戏状态
+          <DialogTitle className="text-base">进入管理模式</DialogTitle>
+          <DialogDescription className="text-sm">
+            输入密码以更新游戏状态和管理任务
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3 mt-2">
           <Input
             type="password"
-            placeholder="请输入密码"
+            placeholder="密码"
             value={password}
             onChange={(e) => {
               setPassword(e.target.value)
               setError('')
             }}
+            className="h-9 bg-secondary border-0"
             autoFocus
           />
-          {error && <p className="text-sm text-red-400">{error}</p>}
-          <Button type="submit" className="w-full">
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <Button type="submit" size="sm" className="h-9">
             确认
           </Button>
         </form>
