@@ -1,5 +1,78 @@
 import { createClient } from '@/lib/supabase/client'
-import type { GameStatus, GameRecord, DailyRecord, AllRecords } from './types'
+import type { GameStatus, GameRecord, DailyRecord, AllRecords, Game, OneTimeTask } from './types'
+
+// ============ 游戏管理 ============
+
+// 获取所有游戏（包括未激活的）
+export async function getAllGames(): Promise<Game[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('games')
+    .select('*')
+    .order('sort_order', { ascending: true })
+  
+  if (error) {
+    console.error('Error fetching games:', error)
+    return []
+  }
+  return data || []
+}
+
+// 获取激活的游戏
+export async function getActiveGames(): Promise<Game[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('games')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+  
+  if (error) {
+    console.error('Error fetching active games:', error)
+    return []
+  }
+  return data || []
+}
+
+// 添加新游戏
+export async function addGame(gameId: string, name: string): Promise<boolean> {
+  const supabase = createClient()
+  const { data: maxOrder } = await supabase
+    .from('games')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .single()
+  
+  const newOrder = (maxOrder?.sort_order || 0) + 1
+  
+  const { error } = await supabase
+    .from('games')
+    .insert({ game_id: gameId, name, sort_order: newOrder })
+  
+  if (error) {
+    console.error('Error adding game:', error)
+    return false
+  }
+  return true
+}
+
+// 切换游戏激活状态（软删除/恢复）
+export async function toggleGameActive(gameId: string, isActive: boolean): Promise<boolean> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('games')
+    .update({ is_active: isActive })
+    .eq('game_id', gameId)
+  
+  if (error) {
+    console.error('Error toggling game:', error)
+    return false
+  }
+  return true
+}
+
+// ============ 游戏进度 ============
 
 // 获取指定日期的所有游戏记录
 export async function getDailyRecord(date: string): Promise<DailyRecord> {
@@ -107,4 +180,95 @@ export async function getRecordsInRange(
   })
   
   return records
+}
+
+// ============ 单次任务 ============
+
+// 获取所有单次任务
+export async function getOneTimeTasks(): Promise<OneTimeTask[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('one_time_tasks')
+    .select('*')
+    .order('created_at', { ascending: false })
+  
+  if (error) {
+    console.error('Error fetching tasks:', error)
+    return []
+  }
+  return data || []
+}
+
+// 获取未完成的单次任务
+export async function getPendingTasks(): Promise<OneTimeTask[]> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('one_time_tasks')
+    .select('*')
+    .neq('status', 'completed')
+    .order('created_at', { ascending: false })
+  
+  if (error) {
+    console.error('Error fetching pending tasks:', error)
+    return []
+  }
+  return data || []
+}
+
+// 添加单次任务
+export async function addOneTimeTask(
+  title: string,
+  description?: string,
+  dueDate?: string
+): Promise<boolean> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('one_time_tasks')
+    .insert({
+      title,
+      description: description || null,
+      due_date: dueDate || null,
+    })
+  
+  if (error) {
+    console.error('Error adding task:', error)
+    return false
+  }
+  return true
+}
+
+// 更新单次任务状态
+export async function updateTaskStatus(
+  taskId: string,
+  status: GameStatus
+): Promise<boolean> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('one_time_tasks')
+    .update({
+      status,
+      completed_at: status === 'completed' ? new Date().toISOString() : null,
+    })
+    .eq('id', taskId)
+  
+  if (error) {
+    console.error('Error updating task:', error)
+    return false
+  }
+  return true
+}
+
+// 删除单次任务
+export async function deleteOneTimeTask(taskId: string): Promise<boolean> {
+  const supabase = createClient()
+  const { error } = await supabase
+    .from('one_time_tasks')
+    .delete()
+    .eq('id', taskId)
+  
+  if (error) {
+    console.error('Error deleting task:', error)
+    return false
+  }
+  return true
 }

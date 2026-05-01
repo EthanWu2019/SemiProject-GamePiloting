@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo, useEffect, useState } from 'react'
+import { useMemo, useEffect, useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
-import { getRecordsInRange } from '@/lib/storage'
+import { getRecordsInRange, getActiveGames } from '@/lib/storage'
 import { getBeijingDateString, formatDateString } from '@/lib/time'
-import { GAMES, type AllRecords } from '@/lib/types'
+import type { AllRecords } from '@/lib/types'
 import {
   Tooltip,
   TooltipContent,
@@ -16,20 +16,6 @@ import { RotateCcw } from 'lucide-react'
 interface ContributionGridProps {
   selectedDate: string
   onDateChange: (date: string) => void
-}
-
-function getCompletionLevel(date: string, records: AllRecords): number {
-  const dayRecord = records[date]
-  if (!dayRecord) return 0
-  
-  const completedCount = Object.values(dayRecord).filter(r => r.status === 'completed').length
-  const totalGames = GAMES.length
-  
-  if (completedCount === 0) return 0
-  if (completedCount === totalGames) return 4
-  if (completedCount >= totalGames * 0.75) return 3
-  if (completedCount >= totalGames * 0.5) return 2
-  return 1
 }
 
 function getLast30Days(): string[] {
@@ -47,60 +33,69 @@ function getLast30Days(): string[] {
   return days
 }
 
-function getWeekdayLabel(dateStr: string): string {
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-  return weekdays[date.getDay()]
-}
-
 export function ContributionGrid({ selectedDate, onDateChange }: ContributionGridProps) {
   const today = getBeijingDateString()
   const days = useMemo(() => getLast30Days(), [])
   const [records, setRecords] = useState<AllRecords>({})
+  const [totalGames, setTotalGames] = useState(5)
+
+  const getCompletionLevel = useCallback((date: string): number => {
+    const dayRecord = records[date]
+    if (!dayRecord) return 0
+    
+    const completedCount = Object.values(dayRecord).filter(r => r.status === 'completed').length
+    
+    if (completedCount === 0) return 0
+    if (completedCount === totalGames) return 4
+    if (completedCount >= totalGames * 0.75) return 3
+    if (completedCount >= totalGames * 0.5) return 2
+    return 1
+  }, [records, totalGames])
   
   useEffect(() => {
-    const loadRecords = async () => {
+    const loadData = async () => {
+      const games = await getActiveGames()
+      setTotalGames(games.length || 5)
+      
       if (days.length === 0) return
       const startDate = days[0]
       const endDate = days[days.length - 1]
       const data = await getRecordsInRange(startDate, endDate)
       setRecords(data)
     }
-    loadRecords()
-  }, [days, selectedDate]) // Re-fetch when selected date changes
+    loadData()
+  }, [days, selectedDate])
   
   const levelColors = [
-    'bg-muted',                           // Level 0: 无数据
-    'bg-green-200 dark:bg-green-900',     // Level 1: 1-2 个
-    'bg-green-400 dark:bg-green-700',     // Level 2: 3 个
-    'bg-green-500 dark:bg-green-500',     // Level 3: 4 个
-    'bg-green-600 dark:bg-green-400',     // Level 4: 全部完成
+    'bg-secondary',
+    'bg-emerald-200 dark:bg-emerald-900/50',
+    'bg-emerald-300 dark:bg-emerald-800/70',
+    'bg-emerald-400 dark:bg-emerald-600/80',
+    'bg-emerald-500 dark:bg-emerald-500',
   ]
 
   return (
-    <div className="bg-card border border-border rounded-xl p-4 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-muted-foreground">近30天代肝记录</h3>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">近30天记录</span>
         {selectedDate !== today && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => onDateChange(today)}
-            className="text-xs gap-1.5"
+            className="h-6 text-xs gap-1 px-2"
           >
             <RotateCcw className="h-3 w-3" />
-            回到今天
+            今天
           </Button>
         )}
       </div>
       
       <TooltipProvider delayDuration={100}>
-        <div className="flex gap-1 flex-wrap justify-center sm:justify-start">
+        <div className="flex gap-[3px] flex-wrap">
           {days.map((date) => {
-            const level = getCompletionLevel(date, records)
+            const level = getCompletionLevel(date)
             const isSelected = date === selectedDate
-            const isToday = date === today
             const completedCount = records[date] 
               ? Object.values(records[date]).filter(r => r.status === 'completed').length 
               : 0
@@ -111,20 +106,16 @@ export function ContributionGrid({ selectedDate, onDateChange }: ContributionGri
                   <button
                     onClick={() => onDateChange(date)}
                     className={`
-                      w-6 h-6 sm:w-7 sm:h-7 rounded-sm transition-all duration-150
+                      w-5 h-5 rounded-[3px] transition-all
                       ${levelColors[level]}
-                      ${isSelected ? 'ring-2 ring-primary ring-offset-2 ring-offset-background' : ''}
-                      ${isToday ? 'ring-1 ring-foreground/30' : ''}
-                      hover:scale-110 hover:brightness-110
+                      ${isSelected ? 'ring-1 ring-foreground ring-offset-1 ring-offset-background' : ''}
+                      hover:ring-1 hover:ring-foreground/50
                     `}
-                    aria-label={`${date}: ${completedCount}/${GAMES.length} 完成`}
                   />
                 </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  <div className="font-medium">{date} (周{getWeekdayLabel(date)})</div>
-                  <div className="text-muted-foreground">
-                    完成: {completedCount}/{GAMES.length}
-                  </div>
+                <TooltipContent side="top" className="text-xs py-1 px-2">
+                  <span>{date}</span>
+                  <span className="text-muted-foreground ml-2">{completedCount}/{totalGames}</span>
                 </TooltipContent>
               </Tooltip>
             )
@@ -132,11 +123,10 @@ export function ContributionGrid({ selectedDate, onDateChange }: ContributionGri
         </div>
       </TooltipProvider>
       
-      {/* Legend */}
-      <div className="flex items-center justify-end gap-2 mt-4 text-xs text-muted-foreground">
+      <div className="flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground">
         <span>少</span>
         {levelColors.map((color, i) => (
-          <div key={i} className={`w-3 h-3 rounded-sm ${color}`} />
+          <div key={i} className={`w-3 h-3 rounded-[2px] ${color}`} />
         ))}
         <span>多</span>
       </div>
