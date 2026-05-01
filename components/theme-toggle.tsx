@@ -20,13 +20,9 @@ export function ThemeToggle() {
 
   useEffect(() => {
     setMounted(true)
-    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light')
-    
-    setTheme(initialTheme)
-    document.documentElement.classList.remove('dark', 'light')
-    document.documentElement.classList.add(initialTheme)
+    // 读取当前 html 上的 class 来确定主题
+    const isDark = document.documentElement.classList.contains('dark')
+    setTheme(isDark ? 'dark' : 'light')
   }, [])
 
   const toggleTheme = useCallback(
