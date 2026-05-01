@@ -20,9 +20,14 @@ export function ThemeToggle() {
 
   useEffect(() => {
     setMounted(true)
-    // 读取当前 html 上的 class 来确定主题
-    const isDark = document.documentElement.classList.contains('dark')
-    setTheme(isDark ? 'dark' : 'light')
+    // 从 localStorage 或 html class 读取主题
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null
+    if (savedTheme) {
+      setTheme(savedTheme)
+    } else {
+      const isDark = document.documentElement.classList.contains('dark')
+      setTheme(isDark ? 'dark' : 'light')
+    }
   }, [])
 
   const toggleTheme = useCallback(
@@ -40,15 +45,17 @@ export function ThemeToggle() {
 
       const newTheme = theme === 'dark' ? 'light' : 'dark'
 
+      const applyTheme = () => {
+        document.documentElement.classList.remove('dark', 'light')
+        document.documentElement.classList.add(newTheme)
+        setTheme(newTheme)
+        localStorage.setItem('theme', newTheme)
+      }
+
       if (document.startViewTransition) {
         isAnimatingRef.current = true
 
-        const transition = document.startViewTransition(() => {
-          document.documentElement.classList.remove('dark', 'light')
-          document.documentElement.classList.add(newTheme)
-          setTheme(newTheme)
-          localStorage.setItem('theme', newTheme)
-        })
+        const transition = document.startViewTransition(applyTheme)
 
         try {
           await transition.ready
@@ -75,10 +82,7 @@ export function ThemeToggle() {
         }
       } else {
         // Fallback for browsers without View Transitions
-        document.documentElement.classList.remove('dark', 'light')
-        document.documentElement.classList.add(newTheme)
-        setTheme(newTheme)
-        localStorage.setItem('theme', newTheme)
+        applyTheme()
       }
     },
     [theme]
@@ -86,8 +90,8 @@ export function ThemeToggle() {
 
   if (!mounted) {
     return (
-      <Button variant="ghost" size="icon" disabled className="h-9 w-9">
-        <Sun className="h-5 w-5" />
+      <Button variant="ghost" size="icon" disabled className="h-8 w-8 sm:h-9 sm:w-9">
+        <Sun className="h-4 w-4 sm:h-5 sm:w-5" />
       </Button>
     )
   }
@@ -97,13 +101,13 @@ export function ThemeToggle() {
       variant="ghost"
       size="icon"
       onClick={toggleTheme}
-      className="h-9 w-9"
+      className="h-8 w-8 sm:h-9 sm:w-9"
       aria-label={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
     >
       {theme === 'dark' ? (
-        <Sun className="h-5 w-5 text-yellow-400" />
+        <Sun className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400" />
       ) : (
-        <Moon className="h-5 w-5 text-slate-700" />
+        <Moon className="h-4 w-4 sm:h-5 sm:w-5 text-slate-700" />
       )}
     </Button>
   )

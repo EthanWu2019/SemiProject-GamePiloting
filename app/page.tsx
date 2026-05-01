@@ -6,6 +6,7 @@ import { AdminDialog } from '@/components/admin-dialog'
 import { ContributionGrid } from '@/components/contribution-grid'
 import { TimeDisplay } from '@/components/time-display'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { ThemeInit } from '@/components/theme-init'
 import { Confetti } from '@/components/confetti'
 import { GAMES, type GameStatus } from '@/lib/types'
 import { getGameRecord, updateGameStatus } from '@/lib/storage'
@@ -99,6 +100,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen bg-background">
+      <ThemeInit />
       <Confetti show={showConfetti} onComplete={handleConfettiComplete} />
       
       {/* 手机端第一屏：100vh 包含所有关键信息 */}
