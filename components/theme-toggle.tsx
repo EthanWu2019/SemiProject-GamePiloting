@@ -46,8 +46,11 @@ export function ThemeToggle() {
       const newTheme = theme === 'dark' ? 'light' : 'dark'
 
       const applyTheme = () => {
+        console.log('[v0] Applying theme:', newTheme)
+        console.log('[v0] Before - classList:', document.documentElement.className)
         document.documentElement.classList.remove('dark', 'light')
         document.documentElement.classList.add(newTheme)
+        console.log('[v0] After - classList:', document.documentElement.className)
         setTheme(newTheme)
         localStorage.setItem('theme', newTheme)
       }
